@@ -79,6 +79,28 @@ function Avatar({ name, size = 36 }) {
   );
 }
 
+function EVLogo({ size = 30 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      <circle cx="32" cy="32" r="30" fill="#ecfdf3" stroke="#22c55e" strokeWidth="3" />
+      <path d="M20 28 C23 18, 41 18, 44 28" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" />
+      <rect x="18" y="28" width="28" height="13" rx="6" fill="#22c55e" />
+      <rect x="26" y="31.5" width="12" height="4" rx="2" fill="#ecfdf3" />
+      <circle cx="24" cy="42.5" r="2.6" fill="#16a34a" />
+      <circle cx="40" cy="42.5" r="2.6" fill="#16a34a" />
+      <path d="M47 16 L57 16 L60 12" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" />
+      <line x1="56.5" y1="12" x2="56.5" y2="8" stroke="#22c55e" strokeWidth="2.8" strokeLinecap="round" />
+      <line x1="60" y1="12" x2="60" y2="8" stroke="#22c55e" strokeWidth="2.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function TimeBar({ startH, endH }) {
   const totalHours = 12;
   const left = ((startH - 6) / totalHours) * 100;
@@ -218,8 +240,10 @@ function LoginScreen({ onLogin }) {
             width: 68, height: 68, borderRadius: 22,
             background: "linear-gradient(135deg,#22d3ee,#3b82f6)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 32, marginBottom: 18, boxShadow: "0 8px 32px rgba(59,130,246,0.35)"
-          }}>⚡</div>
+            marginBottom: 18, boxShadow: "0 8px 32px rgba(59,130,246,0.35)"
+          }}>
+            <EVLogo size={40} />
+          </div>
           <div style={{ fontWeight: 800, color: C.text, fontSize: 26 }}>EV Spot Tracker</div>
           <div style={{ color: C.textSub, fontSize: 15, marginTop: 6 }}>Enter your name to continue</div>
         </div>
@@ -929,7 +953,9 @@ export default function App() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#22d3ee,#3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, boxShadow: "0 2px 8px rgba(59,130,246,0.4)" }}>⚡</div>
+            <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#22d3ee,#3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(59,130,246,0.4)" }}>
+              <EVLogo size={22} />
+            </div>
             <span style={{ fontWeight: 800, color: C.text, fontSize: isMobile ? 14 : 15 }}>EV Spot Tracker</span>
           </div>
           {!isMobile && (
@@ -1041,7 +1067,7 @@ export default function App() {
           </div>
 
           {/* List panel */}
-          <div style={{ flex: 1, background: C.surface }}>
+          <div style={{ flex: 1, background: C.surface, borderTop: `2px solid ${C.border2}`, boxShadow: "0 -10px 24px rgba(0,0,0,0.25)" }}>
             <TabBar />
             {tab === "spots" && <SpotsList />}
             {tab === "waitlist" && <WaitlistContent />}
