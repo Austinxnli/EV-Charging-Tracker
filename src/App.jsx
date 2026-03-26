@@ -1388,12 +1388,12 @@ export default function App() {
           subtitle={waitlist.length > 0 ? `${waitlist.length} person${waitlist.length !== 1 ? "s" : ""} ahead of you` : "You'll be first in line!"}
           onClose={() => setModal(null)}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.surface2, borderRadius: 12, padding: "12px 16px", marginBottom: 18 }}>
-            <Avatar name={currentUser} size={36} />
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: C.surface2, borderRadius: 12, padding: "12px 16px", marginBottom: 18 }}>
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 700, color: C.text, fontSize: 14, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser}</div>
               <div style={{ fontSize: 13, color: C.textSub, lineHeight: 1.25 }}>Position #{waitlist.length + 1} in queue</div>
             </div>
+            <Avatar name={currentUser} size={36} />
           </div>
           {waitlist.length > 0 && (
             <div style={{ background: C.surface2, borderRadius: 10, padding: "12px 14px", marginBottom: 16 }}>
