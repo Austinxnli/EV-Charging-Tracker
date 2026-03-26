@@ -578,22 +578,6 @@ export default function App() {
       return;
     }
 
-    let releaseQuery = supabase.from("occupancy").delete().eq("charger_id", spotId);
-    if (!isAdmin) {
-      releaseQuery = releaseQuery.eq("owner_id", authUserId);
-    }
-
-    const { data: releasedRows, error: releaseErr } = await releaseQuery.select("charger_id");
-    if (releaseErr) {
-      setToast("Error releasing spot");
-      return;
-    }
-
-    if (!isAdmin && (!releasedRows || releasedRows.length === 0)) {
-      setToast("You can only release your own spot.");
-      return;
-    }
-
     if (isAdmin) {
       if (!adminToken) {
         setToast("Admin session expired. Please unlock admin mode again.");
@@ -614,20 +598,42 @@ export default function App() {
           setAdminToken(null);
           setIsAdmin(false);
         }
-        setToast(`Error assigning next user: ${result.error || "request failed"}`);
+        setToast(`Error releasing spot: ${result.error || "request failed"}`);
         return;
       }
 
       await fetchState();
       if (result.assigned && result.assignedName) {
-        setToast(`Spot auto-assigned to ${result.assignedName}!`);
+        if (result.reason === "waitlist_remove_failed") {
+          setToast(`Spot auto-assigned to ${result.assignedName}, but waitlist cleanup needs attention.`);
+        } else {
+          setToast(`Spot auto-assigned to ${result.assignedName}!`);
+        }
       } else if (result.reason === "missing_owner_id") {
         setToast("Spot released. Next waitlist user must rejoin to claim.");
+      } else if (result.reason === "assign_failed") {
+        setToast("Spot released. Could not auto-assign next user; they can claim manually.");
       } else if (waitlist.length > 0) {
         setToast("Spot released. Next person in line can claim now.");
       } else {
         setToast("Spot released.");
       }
+      return;
+    }
+
+    let releaseQuery = supabase.from("occupancy").delete().eq("charger_id", spotId);
+    if (!isAdmin) {
+      releaseQuery = releaseQuery.eq("owner_id", authUserId);
+    }
+
+    const { data: releasedRows, error: releaseErr } = await releaseQuery.select("charger_id");
+    if (releaseErr) {
+      setToast("Error releasing spot");
+      return;
+    }
+
+    if (!isAdmin && (!releasedRows || releasedRows.length === 0)) {
+      setToast("You can only release your own spot.");
       return;
     }
 
@@ -641,18 +647,47 @@ export default function App() {
       return;
     }
 
-    let removeQuery = supabase.from("waitlist").delete().eq("id", id);
-    if (!isAdmin) {
-      removeQuery = removeQuery.eq("owner_id", authUserId);
+    if (isAdmin) {
+      if (!adminToken) {
+        setToast("Admin session expired. Please unlock admin mode again.");
+        setIsAdmin(false);
+        return;
+      }
+
+      const response = await fetch("/api/admin-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: adminToken, action: "removeWaitlistEntry", waitlistId: id })
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          try { sessionStorage.removeItem("ev_admin_token"); } catch (err) { console.warn("Failed to clear admin token", err); }
+          setAdminToken(null);
+          setIsAdmin(false);
+        }
+        setToast(`Failed to remove from waitlist: ${result.error || "request failed"}`);
+        return;
+      }
+
+      await fetchState();
+      return;
     }
 
-    const { data: removedRows, error } = await removeQuery.select("id");
+    const { data: removedRows, error } = await supabase
+      .from("waitlist")
+      .delete()
+      .eq("id", id)
+      .eq("owner_id", authUserId)
+      .select("id");
+
     if (error) {
       setToast("Failed to remove from waitlist");
       return;
     }
 
-    if (!isAdmin && (!removedRows || removedRows.length === 0)) {
+    if (!removedRows || removedRows.length === 0) {
       setToast("You can only remove yourself from waitlist.");
       return;
     }

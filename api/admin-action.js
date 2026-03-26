@@ -72,18 +72,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { token, action, spotId, isActive, currentHour } = parseJsonBody(req);
+  const { token, action, spotId, isActive, currentHour, waitlistId } = parseJsonBody(req);
   if (!verifyAdminToken(token, secret)) {
     res.status(401).json({ error: "Admin session expired. Please unlock admin mode again." });
     return;
   }
 
-  if (!Number.isInteger(spotId)) {
-    res.status(400).json({ error: "Invalid charger id" });
-    return;
-  }
-
   if (action === "releaseSpot") {
+    if (!Number.isInteger(spotId)) {
+      res.status(400).json({ error: "Invalid charger id" });
+      return;
+    }
+
     const releaseResult = await supabaseRequest(
       supabaseUrl,
       serviceRole,
@@ -138,7 +138,13 @@ export default async function handler(req, res) {
     );
 
     if (!assignResult.ok) {
-      res.status(assignResult.status).json({ error: "Failed assigning next user", details: assignResult.data });
+      // Spot release already succeeded. Return warning (200) so UI can reflect partial success.
+      res.status(200).json({
+        ok: true,
+        assigned: false,
+        reason: "assign_failed",
+        details: assignResult.data
+      });
       return;
     }
 
@@ -150,7 +156,14 @@ export default async function handler(req, res) {
     );
 
     if (!removeWaitlistResult.ok) {
-      res.status(removeWaitlistResult.status).json({ error: "Spot assigned, but failed removing from waitlist", details: removeWaitlistResult.data });
+      // Assignment succeeded. Return warning so UI doesn't show hard error for completed release.
+      res.status(200).json({
+        ok: true,
+        assigned: true,
+        assignedName: next.user_name,
+        reason: "waitlist_remove_failed",
+        details: removeWaitlistResult.data
+      });
       return;
     }
 
@@ -158,8 +171,35 @@ export default async function handler(req, res) {
     return;
   }
 
+  if (action === "removeWaitlistEntry") {
+    if (!Number.isInteger(waitlistId)) {
+      res.status(400).json({ error: "Invalid waitlist id" });
+      return;
+    }
+
+    const removeResult = await supabaseRequest(
+      supabaseUrl,
+      serviceRole,
+      "DELETE",
+      `waitlist?id=eq.${waitlistId}`
+    );
+
+    if (!removeResult.ok) {
+      res.status(removeResult.status).json({ error: "Failed removing waitlist entry", details: removeResult.data });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   if (action !== "toggleMaintenance") {
     res.status(400).json({ error: "Unsupported admin action" });
+    return;
+  }
+
+  if (!Number.isInteger(spotId)) {
+    res.status(400).json({ error: "Invalid charger id" });
     return;
   }
 
