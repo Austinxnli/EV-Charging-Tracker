@@ -1171,9 +1171,30 @@ export default function App() {
         }}>
           <div style={{
             position: "absolute", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center"
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexDirection: "column",
+            gap: 12,
+            paddingBottom: 66
           }}>
             <ParkingMap compact={true} />
+
+            {/* Legend + waitlist CTA (kept visible under visual) */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap", padding: "0 14px" }}>
+              {legendItems.map(l => (
+                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 9, height: 9, borderRadius: "50%", background: l.dashed ? "transparent" : l.color, border: l.dashed ? `2px dashed ${l.color}` : "none", flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: C.textSub, fontWeight: 600 }}>{l.label}</span>
+                </div>
+              ))}
+              <button onClick={openWaitlist} style={{
+                padding: "6px 14px", borderRadius: 8,
+                background: C.purpleDim + "aa", border: `1px solid ${C.purple}44`,
+                color: C.purple, fontWeight: 700, fontSize: 12,
+                cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6
+              }}>
+                Join Waitlist {waitlist.length > 0 && <span style={{ background: C.purple, color: "#fff", borderRadius: 99, padding: "1px 7px", fontSize: 11 }}>{waitlist.length}</span>}
+              </button>
+            </div>
           </div>
 
           {/* Collapsible bottom drawer */}
