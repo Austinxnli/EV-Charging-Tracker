@@ -80,26 +80,34 @@ function Avatar({ name, size = 36 }) {
 }
 
 function EVLogo({ size = 30 }) {
+  const green = "#59B947";
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-      style={{ display: "block" }}
-    >
-      <path
-        d="M31 6C19 6 10 16 10 29c0 16 12 29 28 29 9 0 17-4 22-11 3-4 4-8 4-13C64 16 50 6 31 6Z"
-        fill="#0b9d88"
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" style={{ display: "block" }}>
+      <circle
+        cx="50"
+        cy="55"
+        r="40"
+        fill="none"
+        stroke={green}
+        strokeWidth="5"
+        strokeDasharray="228 24"
+        strokeDashoffset="13"
+        strokeLinecap="round"
       />
-      <path
-        d="M29 17c5 0 8 3 8 7 0 3-1 5-4 8-5 4-6 7-6 10 0 5 4 9 9 9 3 0 6-1 9-4-3 5-8 8-14 8-8 0-14-6-14-14 0-7 4-11 10-15 3-2 4-3 4-6 0-2-1-3-2-3z"
-        fill="#d9fff4"
-      />
-      <path d="M40 13h10c3 0 5 2 5 5v2" fill="none" stroke="#0b9d88" strokeWidth="3" strokeLinecap="round" />
-      <line x1="55" y1="16" x2="55" y2="11" stroke="#0b9d88" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="59" y1="16" x2="59" y2="11" stroke="#0b9d88" strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M30 24 25 33h6l-2 8 10-13h-6l3-4z" fill="#e8fff8" />
+
+      <path d="M15 32c12-15 28-22 47-21" fill="none" stroke={green} strokeWidth="5" strokeLinecap="round" />
+
+      <rect x="60" y="6" width="15" height="9" rx="2.5" fill={green} />
+      <rect x="74" y="8" width="9" height="5" rx="2" fill={green} />
+      <rect x="66" y="1" width="3.2" height="6" rx="1.4" fill={green} />
+      <rect x="71" y="1" width="3.2" height="6" rx="1.4" fill={green} />
+
+      <path d="M24 55c0-11 8-20 18-20h16c10 0 18 9 18 20" fill="none" stroke={green} strokeWidth="4.8" strokeLinecap="round" />
+      <rect x="18" y="55" width="64" height="26" rx="7" fill={green} />
+
+      <rect x="35" y="61.5" width="30" height="7" rx="3.5" fill="white" opacity="0.88" />
+      <rect x="24" y="59.5" width="11" height="5" rx="2.5" transform="rotate(-20 24 59.5)" fill="white" opacity="0.88" />
+      <rect x="65" y="59.5" width="11" height="5" rx="2.5" transform="rotate(20 65 59.5)" fill="white" opacity="0.88" />
     </svg>
   );
 }
