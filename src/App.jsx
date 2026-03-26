@@ -121,10 +121,10 @@ function Modal({ title, subtitle, onClose, children }) {
         boxShadow: "0 -24px 80px rgba(0,0,0,0.7)"
       }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 40, height: 4, background: C.border2, borderRadius: 99, margin: "0 auto 22px" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18, color: C.text }}>{title}</div>
-            {subtitle && <div style={{ fontSize: 13, color: C.textSub, marginTop: 4 }}>{subtitle}</div>}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 32, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: C.text, lineHeight: 1.2 }}>{title}</div>
+            {subtitle && <div style={{ fontSize: 13, color: C.textSub, marginTop: 6, lineHeight: 1.3 }}>{subtitle}</div>}
           </div>
           <button onClick={onClose} style={{
             background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10,
@@ -710,7 +710,7 @@ export default function App() {
         borderRadius: "14px 14px 0 0", padding: compact ? "10px 14px 0" : "14px 18px 0",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <span style={{ fontSize: compact ? 9 : 11, fontWeight: 700, color: C.textMuted, letterSpacing: "0.1em" }}>COMPANY HQ · EV CHARGING LEVEL</span>
+          <span style={{ fontSize: compact ? 9 : 11, fontWeight: 700, color: C.textMuted, letterSpacing: "0.1em" }}>CYTIVA VAN · EV PARKING</span>
           <div style={{ display: "flex", gap: 4 }}>
             {[32, 22, 22, 16, 16].map((w, i) => <div key={i} style={{ width: w, height: 11, background: C.bg, borderRadius: 3, border: `1px solid ${C.border}` }} />)}
           </div>
@@ -1390,9 +1390,9 @@ export default function App() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.surface2, borderRadius: 12, padding: "12px 16px", marginBottom: 18 }}>
             <Avatar name={currentUser} size={36} />
-            <div>
-              <div style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>{currentUser}</div>
-              <div style={{ fontSize: 13, color: C.textSub, marginTop: 2 }}>Position #{waitlist.length + 1} in queue</div>
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, color: C.text, fontSize: 14, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser}</div>
+              <div style={{ fontSize: 13, color: C.textSub, lineHeight: 1.25 }}>Position #{waitlist.length + 1} in queue</div>
             </div>
           </div>
           {waitlist.length > 0 && (
