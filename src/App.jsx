@@ -509,6 +509,11 @@ export default function App() {
     setForm({ endH: Math.min(currentH + 2, 18) });
   }
 
+  function openSpotDetail(spotId) {
+    setSelected(spotId);
+    setModal({ type: "spotDetail", spotId });
+  }
+
   async function submitWaitlist() {
     if (waitlist.find(w => w.name.toLowerCase() === currentUser.toLowerCase())) {
       setToast("You're already on the waitlist!");
@@ -681,13 +686,13 @@ export default function App() {
             const avatarSize = compact ? 38 : 48;
             return (
               <div key={spot.id}
-                onClick={() => !isMaint && setSelected(isSelected ? null : spot.id)}
+                onClick={() => openSpotDetail(spot.id)}
                 style={{
                   flex: 1,
                   borderLeft: i > 0 ? `1px dashed ${C.border2}` : "none",
                   display: "flex", flexDirection: "column", alignItems: "center",
                   gap: compact ? 6 : 10, paddingTop: 6, paddingBottom: 4,
-                  cursor: isMaint ? "default" : "pointer",
+                  cursor: "pointer",
                   background: isMaint ? "rgba(245,158,11,0.06)" : isSelected ? "rgba(59,130,246,0.09)" : "transparent",
                   borderRadius: 8, position: "relative",
                   transition: "background 0.15s"
@@ -831,20 +836,13 @@ export default function App() {
         {!isAdmin && !isMaint && (
           <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
             {!occ ? (
-              <>
-                <button onClick={e => { e.stopPropagation(); openClaim(spot.id); }} style={{
-                  flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
-                  background: C.greenDim, color: C.green, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-                }}>Claim Spot</button>
-                <button onClick={e => { e.stopPropagation(); openWaitlist(); }} style={{
-                  flex: 1, padding: "9px 0", borderRadius: 8,
-                  border: `1px solid ${C.purpleDim}`, background: "transparent",
-                  color: C.purple, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-                }}>+ Waitlist</button>
-              </>
+              <button onClick={e => { e.stopPropagation(); openClaim(spot.id); }} style={{
+                flex: 1, padding: "12px 0", borderRadius: 8, border: "none",
+                background: C.greenDim, color: C.green, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+              }}>⚡ Claim Spot</button>
             ) : (
               <>
-                <button style={{
+                <button onClick={e => { e.stopPropagation(); openSpotDetail(spot.id); }} style={{
                   flex: 1, padding: "9px 0", borderRadius: 8,
                   border: `1px solid ${C.border2}`, background: "transparent",
                   color: C.textSub, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
@@ -1250,6 +1248,89 @@ export default function App() {
           }}>Join Waitlist</button>
         </Modal>
       )}
+
+      {/* SPOT DETAIL MODAL */}
+      {modal?.type === "spotDetail" && (() => {
+        const spotId = modal.spotId;
+        const spot = INITIAL_SPOTS.find(s => s.id === spotId);
+        const occ = occupancy[spotId];
+        const isMaint = maintenance[spotId];
+        const isMe = !!occ && ((authUserId && occ.ownerId === authUserId) || occ.name === currentUser);
+        const subtitle = isMaint ? "Under Maintenance" : occ ? "Currently In Use" : "Available";
+        return (
+          <Modal title={spot?.label || `Charger ${spotId}`} subtitle={subtitle} onClose={() => setModal(null)}>
+            {isMaint ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.amberDim, border: `1px solid ${C.amber}33`, borderRadius: 12, padding: "14px 16px", marginBottom: 18 }}>
+                  <div style={{ fontSize: 32, flexShrink: 0 }}>🔧</div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: C.amber, fontSize: 14 }}>Under Maintenance</div>
+                    <div style={{ fontSize: 13, color: C.textSub, marginTop: 3 }}>This charger is temporarily out of service</div>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button onClick={() => { toggleMaintenance(spotId); setModal(null); }} style={{
+                    width: "100%", padding: "13px 0", borderRadius: 11, border: "none",
+                    background: C.greenDim, color: C.green, fontWeight: 800, fontSize: 15,
+                    cursor: "pointer", fontFamily: "inherit"
+                  }}>✓ Mark Back in Service</button>
+                )}
+              </>
+            ) : occ ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.surface2, borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                  <Avatar name={occ.name} size={44} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: C.text, fontSize: 15 }}>{occ.name}</div>
+                    <div style={{ fontSize: 13, color: C.textSub, marginTop: 2 }}>
+                      {HOURS.find(h => h.value === occ.startH)?.label} → {HOURS.find(h => h.value === occ.endH)?.label}
+                    </div>
+                  </div>
+                  {isMe && <span style={{ fontSize: 11, fontWeight: 700, color: C.cyan, background: C.cyanDim, borderRadius: 6, padding: "3px 9px", flexShrink: 0 }}>YOUR SPOT</span>}
+                </div>
+                <div style={{ padding: "0 2px", marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted, marginBottom: 4 }}>
+                    <span>{HOURS.find(h => h.value === occ.startH)?.label}</span>
+                    <span>{HOURS.find(h => h.value === occ.endH)?.label}</span>
+                  </div>
+                  <TimeBar startH={occ.startH} endH={occ.endH} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {(isMe || isAdmin) && (
+                    <button onClick={() => { release(spotId); setModal(null); }} style={{
+                      width: "100%", padding: "13px 0", borderRadius: 11, border: "none",
+                      background: C.redDim, color: C.red, fontWeight: 800, fontSize: 15,
+                      cursor: "pointer", fontFamily: "inherit"
+                    }}>Release Spot</button>
+                  )}
+                  <button onClick={openWaitlist} style={{
+                    width: "100%", padding: "13px 0", borderRadius: 11,
+                    border: `1px solid ${C.purpleDim}`, background: "transparent",
+                    color: C.purple, fontWeight: 800, fontSize: 15,
+                    cursor: "pointer", fontFamily: "inherit"
+                  }}>+ Join Waitlist</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#071a0e", border: `1px solid ${C.green}33`, borderRadius: 12, padding: "14px 16px", marginBottom: 18 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", border: `2px dashed ${C.green}66`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>⚡</div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: C.green, fontSize: 14 }}>Spot Available</div>
+                    <div style={{ fontSize: 13, color: C.textSub, marginTop: 3 }}>No one is currently charging here</div>
+                  </div>
+                </div>
+                <button onClick={() => openClaim(spotId)} style={{
+                  width: "100%", padding: "14px 0", borderRadius: 11, border: "none",
+                  background: "linear-gradient(135deg,#16a34a,#15803d)",
+                  color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer",
+                  fontFamily: "inherit", boxShadow: "0 4px 16px rgba(34,197,94,0.25)"
+                }}>⚡ Claim This Spot</button>
+              </>
+            )}
+          </Modal>
+        );
+      })()}
 
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
