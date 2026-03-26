@@ -499,12 +499,25 @@ export default function App() {
       return;
     }
 
+    // If user was in the waitlist, remove their entry after successful claim.
+    if (authUserId) {
+      await supabase.from("waitlist").delete().eq("owner_id", authUserId);
+    } else {
+      await supabase.from("waitlist").delete().eq("user_name", currentUser);
+    }
+
     await fetchState();
     setModal(null);
     setToast("Spot claimed!");
   }
 
   function openWaitlist() {
+    const alreadyCharging = Object.values(occupancy).some(v => (authUserId && v.ownerId === authUserId) || v.name === currentUser);
+    if (alreadyCharging) {
+      setToast("You're already charging. Release your spot before joining waitlist.");
+      setTab("spots");
+      return;
+    }
     setModal({ type: "waitlist" });
     setForm({ endH: Math.min(currentH + 2, 18) });
   }
@@ -515,6 +528,14 @@ export default function App() {
   }
 
   async function submitWaitlist() {
+    const alreadyCharging = Object.values(occupancy).some(v => (authUserId && v.ownerId === authUserId) || v.name === currentUser);
+    if (alreadyCharging) {
+      setToast("You're already charging. Release your spot before joining waitlist.");
+      setModal(null);
+      setTab("spots");
+      return;
+    }
+
     if (waitlist.find(w => w.name.toLowerCase() === currentUser.toLowerCase())) {
       setToast("You're already on the waitlist!");
       setModal(null);
@@ -581,16 +602,20 @@ export default function App() {
         return;
       }
 
-      const { error: upsertErr } = await supabase.from("occupancy").upsert({
+      // Avoid upsert/onConflict dependency on a unique index by using delete then insert.
+      await supabase.from("occupancy").delete().eq("charger_id", spotId);
+
+      const { error: assignErr } = await supabase.from("occupancy").insert({
         charger_id: spotId,
         user_name: next.name,
         owner_id: next.ownerId,
         start_h: currentH,
         end_h: next.endH,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
-      }, { onConflict: "charger_id" });
-      if (upsertErr) {
-        setToast("Error assigning next user");
+      });
+      if (assignErr) {
+        setToast(`Error assigning next user: ${assignErr.message || "unknown error"}`);
         return;
       }
 
