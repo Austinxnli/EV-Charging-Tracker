@@ -594,42 +594,45 @@ export default function App() {
       return;
     }
 
-    if (waitlist.length > 0 && isAdmin) {
-      const next = waitlist[0];
-      if (!next.ownerId) {
-        await fetchState();
-        setToast("Spot released. Next waitlist user must rejoin to claim.");
+    if (isAdmin) {
+      if (!adminToken) {
+        setToast("Admin session expired. Please unlock admin mode again.");
+        setIsAdmin(false);
         return;
       }
 
-      // Avoid upsert/onConflict dependency on a unique index by using delete then insert.
-      await supabase.from("occupancy").delete().eq("charger_id", spotId);
-
-      const { error: assignErr } = await supabase.from("occupancy").insert({
-        charger_id: spotId,
-        user_name: next.name,
-        owner_id: next.ownerId,
-        start_h: currentH,
-        end_h: next.endH,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+      const response = await fetch("/api/admin-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: adminToken, action: "releaseSpot", spotId, currentHour: currentH })
       });
-      if (assignErr) {
-        setToast(`Error assigning next user: ${assignErr.message || "unknown error"}`);
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          try { sessionStorage.removeItem("ev_admin_token"); } catch (err) { console.warn("Failed to clear admin token", err); }
+          setAdminToken(null);
+          setIsAdmin(false);
+        }
+        setToast(`Error assigning next user: ${result.error || "request failed"}`);
         return;
       }
 
-      const { error: deleteErr } = await supabase.from("waitlist").delete().eq("id", next.id);
-      if (deleteErr) {
-        setToast("Spot released, but failed to update waitlist.");
+      await fetchState();
+      if (result.assigned && result.assignedName) {
+        setToast(`Spot auto-assigned to ${result.assignedName}!`);
+      } else if (result.reason === "missing_owner_id") {
+        setToast("Spot released. Next waitlist user must rejoin to claim.");
+      } else if (waitlist.length > 0) {
+        setToast("Spot released. Next person in line can claim now.");
+      } else {
+        setToast("Spot released.");
       }
-
-      await fetchState();
-      setToast(`Spot auto-assigned to ${next.name}!`);
-    } else {
-      await fetchState();
-      setToast(waitlist.length > 0 ? "Spot released. Next person in line can claim now." : "Spot released.");
+      return;
     }
+
+    await fetchState();
+    setToast(waitlist.length > 0 ? "Spot released. Next person in line can claim now." : "Spot released.");
   }
 
   async function removeFromWaitlist(id, ownerId) {

@@ -72,19 +72,94 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { token, action, spotId, isActive } = parseJsonBody(req);
+  const { token, action, spotId, isActive, currentHour } = parseJsonBody(req);
   if (!verifyAdminToken(token, secret)) {
     res.status(401).json({ error: "Admin session expired. Please unlock admin mode again." });
     return;
   }
 
-  if (action !== "toggleMaintenance") {
-    res.status(400).json({ error: "Unsupported admin action" });
+  if (!Number.isInteger(spotId)) {
+    res.status(400).json({ error: "Invalid charger id" });
     return;
   }
 
-  if (!Number.isInteger(spotId)) {
-    res.status(400).json({ error: "Invalid charger id" });
+  if (action === "releaseSpot") {
+    const releaseResult = await supabaseRequest(
+      supabaseUrl,
+      serviceRole,
+      "DELETE",
+      `occupancy?charger_id=eq.${spotId}`
+    );
+
+    if (!releaseResult.ok) {
+      res.status(releaseResult.status).json({ error: "Failed releasing spot", details: releaseResult.data });
+      return;
+    }
+
+    const waitlistResult = await supabaseRequest(
+      supabaseUrl,
+      serviceRole,
+      "GET",
+      "waitlist?select=id,user_name,owner_id,end_h&order=joined_at.asc&limit=1"
+    );
+
+    if (!waitlistResult.ok) {
+      res.status(waitlistResult.status).json({ error: "Spot released, but failed loading waitlist", details: waitlistResult.data });
+      return;
+    }
+
+    const rows = Array.isArray(waitlistResult.data) ? waitlistResult.data : [];
+    if (rows.length === 0) {
+      res.status(200).json({ ok: true, assigned: false });
+      return;
+    }
+
+    const next = rows[0];
+    if (!next.owner_id) {
+      res.status(200).json({ ok: true, assigned: false, reason: "missing_owner_id" });
+      return;
+    }
+
+    const nowHour = Number.isInteger(currentHour) ? currentHour : new Date().getHours();
+    const assignResult = await supabaseRequest(
+      supabaseUrl,
+      serviceRole,
+      "POST",
+      "occupancy",
+      {
+        charger_id: spotId,
+        user_name: next.user_name,
+        owner_id: next.owner_id,
+        start_h: nowHour,
+        end_h: next.end_h,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    );
+
+    if (!assignResult.ok) {
+      res.status(assignResult.status).json({ error: "Failed assigning next user", details: assignResult.data });
+      return;
+    }
+
+    const removeWaitlistResult = await supabaseRequest(
+      supabaseUrl,
+      serviceRole,
+      "DELETE",
+      `waitlist?id=eq.${next.id}`
+    );
+
+    if (!removeWaitlistResult.ok) {
+      res.status(removeWaitlistResult.status).json({ error: "Spot assigned, but failed removing from waitlist", details: removeWaitlistResult.data });
+      return;
+    }
+
+    res.status(200).json({ ok: true, assigned: true, assignedName: next.user_name });
+    return;
+  }
+
+  if (action !== "toggleMaintenance") {
+    res.status(400).json({ error: "Unsupported admin action" });
     return;
   }
 
