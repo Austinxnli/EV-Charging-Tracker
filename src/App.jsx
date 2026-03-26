@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabaseClient";
 
 const INITIAL_SPOTS = [
   { id: 1, label: "Charger 1" },
@@ -130,6 +131,22 @@ function Field({ label, children }) {
       {children}
     </div>
   );
+}
+
+function toOccupancyMap(rows = []) {
+  return (rows || []).reduce((acc, row) => {
+    if (!row?.charger_id) return acc;
+    acc[row.charger_id] = { name: row.user_name, startH: row.start_h, endH: row.end_h };
+    return acc;
+  }, {});
+}
+
+function toMaintenanceMap(rows = []) {
+  return (rows || []).reduce((acc, row) => {
+    if (!row?.charger_id) return acc;
+    acc[row.charger_id] = row.is_active;
+    return acc;
+  }, {});
 }
 
 const inputStyle = {
@@ -275,11 +292,45 @@ export default function App() {
   const sideRef = useRef(null);
   const isMobile = useIsMobile();
 
+  const fetchState = async () => {
+    const [occRes, wlRes, mRes] = await Promise.all([
+      supabase.from("occupancy").select("*").order("charger_id"),
+      supabase.from("waitlist").select("*").order("joined_at"),
+      supabase.from("maintenance").select("*")
+    ]);
+
+    if (!occRes.error) setOccupancy(toOccupancyMap(occRes.data));
+    if (!wlRes.error) setWaitlist((wlRes.data || []).map(row => ({
+      id: row.id,
+      name: row.user_name,
+      joinedAt: row.joined_at,
+      endH: row.end_h
+    })));
+    if (!mRes.error) setMaintenance(toMaintenanceMap(mRes.data));
+  };
+
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("ev_current_user");
-      if (saved) setCurrentUser(saved);
-    } catch {}
+    const loadInitial = async () => {
+      try {
+        const saved = localStorage.getItem("ev_current_user");
+        if (saved) setCurrentUser(saved);
+      } catch {
+        // ignore
+      }
+      await fetchState();
+    };
+
+    loadInitial();
+
+    const channel = supabase.channel("ev-tracker-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "occupancy" }, () => fetchState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "waitlist" }, () => fetchState())
+      .on("postgres_changes", { event: "*", schema: "public", table: "maintenance" }, () => fetchState())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -301,12 +352,24 @@ export default function App() {
 
   const availCount = INITIAL_SPOTS.filter(s => !occupancy[s.id] && !maintenance[s.id]).length;
 
-  function toggleMaintenance(spotId) {
+  async function toggleMaintenance(spotId) {
     const isNowMaintenance = !maintenance[spotId];
-    setMaintenance(m => ({ ...m, [spotId]: isNowMaintenance }));
-    if (isNowMaintenance && occupancy[spotId]) {
-      setOccupancy(o => { const n = { ...o }; delete n[spotId]; return n; });
+    const { error } = await supabase.from("maintenance").upsert({
+      charger_id: spotId,
+      is_active: isNowMaintenance,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "charger_id" });
+
+    if (error) {
+      setToast("Error updating maintenance status");
+      return;
     }
+
+    if (isNowMaintenance && occupancy[spotId]) {
+      await supabase.from("occupancy").delete().eq("charger_id", spotId);
+    }
+
+    await fetchState();
     setToast(isNowMaintenance ? `Charger ${spotId} marked as under maintenance` : `Charger ${spotId} is back in service`);
   }
 
@@ -315,12 +378,26 @@ export default function App() {
     setForm({ startH: currentH, endH: Math.min(currentH + 2, 18) });
   }
 
-  function submitClaim() {
+  async function submitClaim() {
     if (+form.startH >= +form.endH) {
       setToast("Start time must be before end time");
       return;
     }
-    setOccupancy(o => ({ ...o, [modal.spotId]: { name: currentUser, startH: +form.startH, endH: +form.endH } }));
+
+    const { error } = await supabase.from("occupancy").upsert({
+      charger_id: modal.spotId,
+      user_name: currentUser,
+      start_h: +form.startH,
+      end_h: +form.endH,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "charger_id" });
+
+    if (error) {
+      setToast("Error saving claim. Please try again.");
+      return;
+    }
+
+    await fetchState();
     setModal(null);
     setToast("Spot claimed!");
   }
@@ -330,31 +407,70 @@ export default function App() {
     setForm({ endH: Math.min(currentH + 2, 18) });
   }
 
-  function submitWaitlist() {
+  async function submitWaitlist() {
     if (waitlist.find(w => w.name.toLowerCase() === currentUser.toLowerCase())) {
       setToast("You're already on the waitlist!");
       setModal(null);
       return;
     }
-    setWaitlist(w => [...w, { id: Date.now(), name: currentUser, joinedAt: Date.now(), endH: +form.endH }]);
+
+    const { error } = await supabase.from("waitlist").insert({
+      user_name: currentUser,
+      joined_at: new Date().toISOString(),
+      end_h: +form.endH
+    });
+
+    if (error) {
+      setToast("Error adding to waitlist. Please try again.");
+      return;
+    }
+
+    await fetchState();
     setToast(`Added to waitlist — you're #${waitlist.length + 1}`);
     setModal(null);
     setTab("waitlist");
   }
 
-  function release(spotId) {
+  async function release(spotId) {
     if (waitlist.length > 0) {
       const next = waitlist[0];
-      setOccupancy(o => ({ ...o, [spotId]: { name: next.name, startH: currentH, endH: next.endH } }));
-      setWaitlist(w => w.slice(1));
+      const { error: deleteErr } = await supabase.from("waitlist").delete().eq("id", next.id);
+      if (deleteErr) {
+        setToast("Error releasing spot");
+        return;
+      }
+      const { error: upsertErr } = await supabase.from("occupancy").upsert({
+        charger_id: spotId,
+        user_name: next.name,
+        start_h: currentH,
+        end_h: next.endH,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "charger_id" });
+      if (upsertErr) {
+        setToast("Error assigning next user");
+        return;
+      }
+      await fetchState();
       setToast(`Spot auto-assigned to ${next.name}!`);
     } else {
-      setOccupancy(o => { const n = { ...o }; delete n[spotId]; return n; });
+      const { error } = await supabase.from("occupancy").delete().eq("charger_id", spotId);
+      if (error) {
+        setToast("Error releasing spot");
+        return;
+      }
+      await fetchState();
       setToast("Spot released.");
     }
   }
 
-  function removeFromWaitlist(id) { setWaitlist(w => w.filter(x => x.id !== id)); }
+  async function removeFromWaitlist(id) {
+    const { error } = await supabase.from("waitlist").delete().eq("id", id);
+    if (error) {
+      setToast("Failed to remove from waitlist");
+      return;
+    }
+    await fetchState();
+  }
 
   function formatWait(ts) {
     const mins = Math.floor((Date.now() - ts) / 60000);
