@@ -231,7 +231,7 @@ function LoginScreen({ onLogin }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             marginBottom: 18
           }}>
-            <EVLogo size={70} />
+            <EVLogo size={96} />
           </div>
           <div style={{ fontWeight: 800, color: C.text, fontSize: 26 }}>EV Spot Tracker</div>
           <div style={{ color: C.textSub, fontSize: 15, marginTop: 6 }}>Enter your name to continue</div>
@@ -1064,7 +1064,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <EVLogo size={isMobile ? 28 : 32} />
+              <EVLogo size={isMobile ? 32 : 36} />
             </div>
             <span style={{ fontWeight: 800, color: C.text, fontSize: isMobile ? 14 : 15 }}>EV Spot Tracker</span>
           </div>
