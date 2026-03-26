@@ -88,15 +88,18 @@ function EVLogo({ size = 30 }) {
       aria-hidden="true"
       style={{ display: "block" }}
     >
-      <circle cx="32" cy="32" r="30" fill="#ecfdf3" stroke="#22c55e" strokeWidth="3" />
-      <path d="M20 28 C23 18, 41 18, 44 28" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" />
-      <rect x="18" y="28" width="28" height="13" rx="6" fill="#22c55e" />
-      <rect x="26" y="31.5" width="12" height="4" rx="2" fill="#ecfdf3" />
-      <circle cx="24" cy="42.5" r="2.6" fill="#16a34a" />
-      <circle cx="40" cy="42.5" r="2.6" fill="#16a34a" />
-      <path d="M47 16 L57 16 L60 12" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" />
-      <line x1="56.5" y1="12" x2="56.5" y2="8" stroke="#22c55e" strokeWidth="2.8" strokeLinecap="round" />
-      <line x1="60" y1="12" x2="60" y2="8" stroke="#22c55e" strokeWidth="2.8" strokeLinecap="round" />
+      <path
+        d="M31 6C19 6 10 16 10 29c0 16 12 29 28 29 9 0 17-4 22-11 3-4 4-8 4-13C64 16 50 6 31 6Z"
+        fill="#0b9d88"
+      />
+      <path
+        d="M29 17c5 0 8 3 8 7 0 3-1 5-4 8-5 4-6 7-6 10 0 5 4 9 9 9 3 0 6-1 9-4-3 5-8 8-14 8-8 0-14-6-14-14 0-7 4-11 10-15 3-2 4-3 4-6 0-2-1-3-2-3z"
+        fill="#d9fff4"
+      />
+      <path d="M40 13h10c3 0 5 2 5 5v2" fill="none" stroke="#0b9d88" strokeWidth="3" strokeLinecap="round" />
+      <line x1="55" y1="16" x2="55" y2="11" stroke="#0b9d88" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="59" y1="16" x2="59" y2="11" stroke="#0b9d88" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M30 24 25 33h6l-2 8 10-13h-6l3-4z" fill="#e8fff8" />
     </svg>
   );
 }
@@ -237,12 +240,10 @@ function LoginScreen({ onLogin }) {
       <div style={{ position: "relative", zIndex: 1, width: "100%", maxWidth: 400, padding: "0 24px" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 44 }}>
           <div style={{
-            width: 68, height: 68, borderRadius: 22,
-            background: "linear-gradient(135deg,#22d3ee,#3b82f6)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            marginBottom: 18, boxShadow: "0 8px 32px rgba(59,130,246,0.35)"
+            marginBottom: 18
           }}>
-            <EVLogo size={40} />
+            <EVLogo size={70} />
           </div>
           <div style={{ fontWeight: 800, color: C.text, fontSize: 26 }}>EV Spot Tracker</div>
           <div style={{ color: C.textSub, fontSize: 15, marginTop: 6 }}>Enter your name to continue</div>
@@ -953,8 +954,8 @@ export default function App() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 10 : 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#22d3ee,#3b82f6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(59,130,246,0.4)" }}>
-              <EVLogo size={22} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <EVLogo size={isMobile ? 28 : 32} />
             </div>
             <span style={{ fontWeight: 800, color: C.text, fontSize: isMobile ? 14 : 15 }}>EV Spot Tracker</span>
           </div>
