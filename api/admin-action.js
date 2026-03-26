@@ -172,16 +172,20 @@ export default async function handler(req, res) {
   }
 
   if (action === "removeWaitlistEntry") {
-    if (!Number.isInteger(waitlistId)) {
+    const hasNumericId = Number.isInteger(waitlistId);
+    const hasStringId = typeof waitlistId === "string" && waitlistId.trim().length > 0;
+    if (!hasNumericId && !hasStringId) {
       res.status(400).json({ error: "Invalid waitlist id" });
       return;
     }
+
+    const waitlistIdValue = hasNumericId ? String(waitlistId) : waitlistId.trim();
 
     const removeResult = await supabaseRequest(
       supabaseUrl,
       serviceRole,
       "DELETE",
-      `waitlist?id=eq.${waitlistId}`
+      `waitlist?id=eq.${encodeURIComponent(waitlistIdValue)}`
     );
 
     if (!removeResult.ok) {
