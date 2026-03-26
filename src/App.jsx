@@ -290,6 +290,7 @@ export default function App() {
   const [tab, setTab] = useState("spots");
   const [isAdmin, setIsAdmin] = useState(false);
   const [authUserId, setAuthUserId] = useState(null);
+  const [adminToken, setAdminToken] = useState(null);
   const sideRef = useRef(null);
   const isMobile = useIsMobile();
 
@@ -316,6 +317,12 @@ export default function App() {
       try {
         const saved = localStorage.getItem("ev_current_user");
         if (saved) setCurrentUser(saved);
+
+        const savedAdminToken = sessionStorage.getItem("ev_admin_token");
+        if (savedAdminToken) {
+          setAdminToken(savedAdminToken);
+          setIsAdmin(true);
+        }
       } catch {
         // ignore
       }
@@ -341,17 +348,25 @@ export default function App() {
     };
 
     loadInitial();
+  }, []);
+
+  useEffect(() => {
+    if (!authUserId) return;
 
     const channel = supabase.channel("ev-tracker-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "occupancy" }, () => fetchState())
       .on("postgres_changes", { event: "*", schema: "public", table: "waitlist" }, () => fetchState())
       .on("postgres_changes", { event: "*", schema: "public", table: "maintenance" }, () => fetchState())
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          fetchState();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [authUserId]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000);
@@ -378,20 +393,30 @@ export default function App() {
       return;
     }
 
-    const isNowMaintenance = !maintenance[spotId];
-    const { error } = await supabase.from("maintenance").upsert({
-      charger_id: spotId,
-      is_active: isNowMaintenance,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "charger_id" });
-
-    if (error) {
-      setToast("Error updating maintenance status");
+    if (!adminToken) {
+      setToast("Admin session expired. Please unlock admin mode again.");
+      setIsAdmin(false);
       return;
     }
 
-    if (isNowMaintenance && occupancy[spotId]) {
-      await supabase.from("occupancy").delete().eq("charger_id", spotId);
+    const isNowMaintenance = !maintenance[spotId];
+
+    const response = await fetch("/api/admin-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: adminToken, action: "toggleMaintenance", spotId, isActive: isNowMaintenance })
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      if (response.status === 401) {
+          try { sessionStorage.removeItem("ev_admin_token"); } catch (err) { console.warn("Failed to clear admin token", err); }
+        setAdminToken(null);
+        setIsAdmin(false);
+      }
+      setToast(`Error updating maintenance: ${result.error || "request failed"}`);
+      return;
     }
 
     await fetchState();
@@ -937,7 +962,15 @@ export default function App() {
             >✕</button>
           </div>
           <button
-            onClick={() => isAdmin ? setIsAdmin(false) : setModal({ type: "adminLogin" })}
+            onClick={() => {
+              if (isAdmin) {
+                try { sessionStorage.removeItem("ev_admin_token"); } catch (err) { console.warn("Failed to clear admin token", err); }
+                setAdminToken(null);
+                setIsAdmin(false);
+              } else {
+                setModal({ type: "adminLogin" });
+              }
+            }}
             style={{
               padding: "5px 10px", borderRadius: 8,
               border: `1px solid ${isAdmin ? C.amber + "88" : C.border2}`,
@@ -970,7 +1003,7 @@ export default function App() {
             }}>Release</button>
           )}
           {myWaitPos >= 0 && (
-            <button onClick={() => removeFromWaitlist(waitlist[myWaitPos].id)} style={{
+            <button onClick={() => removeFromWaitlist(waitlist[myWaitPos].id, waitlist[myWaitPos].ownerId)} style={{
               flexShrink: 0, padding: "5px 14px", borderRadius: 7, border: "none",
               background: C.amberDim, color: C.amber, fontSize: 12, fontWeight: 700,
               cursor: "pointer", fontFamily: "inherit"
@@ -1062,9 +1095,31 @@ export default function App() {
       {modal?.type === "adminLogin" && (() => {
         const AdminModal = () => {
           const [pw, setPw] = useState("");
-          const attempt = () => {
-            if (pw === "CytivaADM") { setIsAdmin(true); setModal(null); setToast("Admin mode enabled"); }
-            else setToast("Incorrect passcode");
+          const [isSubmitting, setIsSubmitting] = useState(false);
+          const attempt = async () => {
+            if (isSubmitting) return;
+            setIsSubmitting(true);
+            try {
+              const response = await fetch("/api/admin-login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password: pw })
+              });
+              const result = await response.json().catch(() => ({}));
+
+              if (!response.ok || !result.token) {
+                setToast(result.error || "Incorrect passcode");
+                return;
+              }
+
+              try { sessionStorage.setItem("ev_admin_token", result.token); } catch (err) { console.warn("Failed to persist admin token", err); }
+              setAdminToken(result.token);
+              setIsAdmin(true);
+              setModal(null);
+              setToast("Admin mode enabled");
+            } finally {
+              setIsSubmitting(false);
+            }
           };
           return (
             <Modal title="Admin Access" subtitle="Enter the admin passcode to manage charger status" onClose={() => setModal(null)}>
@@ -1079,11 +1134,12 @@ export default function App() {
                 <input type="password" style={inputStyle} placeholder="Enter admin passcode"
                   autoFocus value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && attempt()} />
               </Field>
-              <button onClick={attempt} style={{
+              <button onClick={attempt} disabled={isSubmitting} style={{
                 width: "100%", padding: "14px 0", borderRadius: 11, border: "none",
-                background: "linear-gradient(135deg,#b45309,#92400e)",
-                color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", fontFamily: "inherit", marginTop: 6
-              }}>Unlock Admin</button>
+                background: isSubmitting ? C.surface2 : "linear-gradient(135deg,#b45309,#92400e)",
+                color: isSubmitting ? C.textMuted : "#fff", fontWeight: 800, fontSize: 15,
+                cursor: isSubmitting ? "not-allowed" : "pointer", fontFamily: "inherit", marginTop: 6
+              }}>{isSubmitting ? "Checking..." : "Unlock Admin"}</button>
             </Modal>
           );
         };
