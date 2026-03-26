@@ -779,6 +779,7 @@ export default function App() {
     const isMe = !!occ && ((authUserId && occ.ownerId === authUserId) || occ.name === currentUser);
     const isSelected = selected === spot.id;
     const isMaint = maintenance[spot.id];
+    const canRelease = !!occ && (isMe || isAdmin);
     return (
       <div key={spot.id} data-spot={spot.id}
         onClick={() => setSelected(isSelected ? null : spot.id)}
@@ -833,13 +834,21 @@ export default function App() {
           >{isMaint ? "🔧 Mark as Back in Service" : "🔧 Mark as Under Maintenance"}</button>
         )}
 
-        {!isAdmin && !isMaint && (
+        {!isMaint && (
           <div style={{ display: "flex", gap: 7, marginTop: 10 }}>
             {!occ ? (
-              <button onClick={e => { e.stopPropagation(); openClaim(spot.id); }} style={{
-                flex: 1, padding: "12px 0", borderRadius: 8, border: "none",
-                background: C.greenDim, color: C.green, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-              }}>⚡ Claim Spot</button>
+              !isAdmin ? (
+                <button onClick={e => { e.stopPropagation(); openClaim(spot.id); }} style={{
+                  flex: 1, padding: "12px 0", borderRadius: 8, border: "none",
+                  background: C.greenDim, color: C.green, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                }}>⚡ Claim Spot</button>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); openSpotDetail(spot.id); }} style={{
+                  flex: 1, padding: "10px 0", borderRadius: 8,
+                  border: `1px solid ${C.border2}`, background: "transparent",
+                  color: C.textSub, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                }}>Details</button>
+              )
             ) : (
               <>
                 <button onClick={e => { e.stopPropagation(); openSpotDetail(spot.id); }} style={{
@@ -847,11 +856,11 @@ export default function App() {
                   border: `1px solid ${C.border2}`, background: "transparent",
                   color: C.textSub, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
                 }}>Details</button>
-                {(isMe || isAdmin) ? (
+                {canRelease ? (
                   <button onClick={e => { e.stopPropagation(); release(spot.id); }} style={{
                     flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
                     background: C.redDim, color: C.red, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-                  }}>Release</button>
+                  }}>{isAdmin && !isMe ? "Remove User" : "Release"}</button>
                 ) : (
                   <button disabled style={{
                     flex: 1, padding: "9px 0", borderRadius: 8,
@@ -914,8 +923,17 @@ export default function App() {
                 </div>
                 {(isMe || isAdmin) ? (
                   <button onClick={() => removeFromWaitlist(entry.id, entry.ownerId)} style={{
-                    background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: "4px", borderRadius: 6, flexShrink: 0
-                  }}>✕</button>
+                    background: "transparent",
+                    border: `1px solid ${isAdmin && !isMe ? C.red + "44" : C.border2}`,
+                    color: isAdmin && !isMe ? C.red : C.textMuted,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "6px 10px",
+                    borderRadius: 7,
+                    flexShrink: 0,
+                    fontFamily: "inherit"
+                  }}>{isAdmin && !isMe ? "Remove" : "Leave"}</button>
                 ) : (
                   <button disabled style={{
                     background: "transparent", border: "none", color: C.textMuted, cursor: "not-allowed", fontSize: 16, padding: "4px", borderRadius: 6, flexShrink: 0, opacity: 0.4
@@ -1301,7 +1319,7 @@ export default function App() {
                       width: "100%", padding: "13px 0", borderRadius: 11, border: "none",
                       background: C.redDim, color: C.red, fontWeight: 800, fontSize: 15,
                       cursor: "pointer", fontFamily: "inherit"
-                    }}>Release Spot</button>
+                    }}>{isAdmin && !isMe ? "Remove User From Spot" : "Release Spot"}</button>
                   )}
                   <button onClick={openWaitlist} style={{
                     width: "100%", padding: "13px 0", borderRadius: 11,
