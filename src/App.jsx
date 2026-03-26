@@ -162,6 +162,12 @@ function toMaintenanceMap(rows = []) {
   }, {});
 }
 
+function formatHourLabel(hour, fallback = "unspecified") {
+  const n = Number(hour);
+  if (Number.isNaN(n)) return fallback;
+  return HOURS.find(h => h.value === n)?.label || fallback;
+}
+
 const inputStyle = {
   width: "100%", padding: "11px 13px", borderRadius: 10,
   border: `1px solid ${C.border2}`, fontSize: 15, background: C.surface2,
@@ -973,7 +979,7 @@ export default function App() {
                     {idx === 0 && <span style={{ fontSize: 10, fontWeight: 700, color: C.blue, background: C.blueDim, borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>NEXT</span>}
                     {isMe && <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberDim, borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>YOU</span>}
                   </div>
-                  <div style={{ fontSize: 12, color: C.textMuted }}>Joined {formatWait(entry.joinedAt)} · until {HOURS.find(h => h.value === entry.endH)?.label}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>Joined {formatWait(entry.joinedAt)} · until {formatHourLabel(entry.endH)}</div>
                 </div>
                 {(isMe || isAdmin) ? (
                   <button onClick={() => removeFromWaitlist(entry.id, entry.ownerId)} style={{
@@ -1128,7 +1134,7 @@ export default function App() {
         }}>
           <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 700, color: mySpot ? C.green : C.amber, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {mySpot
-              ? `⚡ Charging at Charger ${mySpot[0]} · until ${HOURS.find(h => h.value === mySpot[1].endH)?.label}`
+              ? `⚡ Charging at Charger ${mySpot[0]} · until ${formatHourLabel(mySpot[1].endH)}`
               : `🕐 Waitlist position #${myWaitPos + 1}`}
           </span>
           {mySpot && (
