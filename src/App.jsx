@@ -303,7 +303,7 @@ export default function App() {
     if (!wlRes.error) setWaitlist((wlRes.data || []).map(row => ({
       id: row.id,
       name: row.user_name,
-      joinedAt: row.joined_at,
+      joinedAt: Date.parse(row.joined_at),
       endH: row.end_h
     })));
     if (!mRes.error) setMaintenance(toMaintenanceMap(mRes.data));
@@ -384,13 +384,17 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.from("occupancy").upsert({
+    // Ensure no conflicting occupancy row before adding. This avoids requiring a unique index on charger_id.
+    await supabase.from("occupancy").delete().eq("charger_id", modal.spotId);
+
+    const { error } = await supabase.from("occupancy").insert({
       charger_id: modal.spotId,
       user_name: currentUser,
       start_h: +form.startH,
       end_h: +form.endH,
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }, { onConflict: "charger_id" });
+    });
 
     if (error) {
       setToast("Error saving claim. Please try again.");
@@ -473,7 +477,11 @@ export default function App() {
   }
 
   function formatWait(ts) {
-    const mins = Math.floor((Date.now() - ts) / 60000);
+    const time = typeof ts === "string" ? Date.parse(ts) : ts;
+    if (!time || Number.isNaN(time)) {
+      return "unknown";
+    }
+    const mins = Math.floor((Date.now() - time) / 60000);
     if (mins < 1) return "just now";
     if (mins < 60) return `${mins}m ago`;
     return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
