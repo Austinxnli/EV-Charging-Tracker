@@ -313,10 +313,13 @@ export default function App() {
   const [now, setNow] = useState(new Date());
   const [toast, setToast] = useState(null);
   const [tab, setTab] = useState("spots");
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [authUserId, setAuthUserId] = useState(null);
   const [adminToken, setAdminToken] = useState(null);
   const sideRef = useRef(null);
+  const mobileDrawerTouchRef = useRef({ startY: 0, lastY: 0, moved: false });
+  const skipMobileDrawerClickRef = useRef(false);
   const isMobile = useIsMobile();
 
   const fetchState = async () => {
@@ -1019,6 +1022,45 @@ export default function App() {
 
   const claimRangeValid = (form.startH != null && form.endH != null ? +form.startH < +form.endH : true);
 
+  function handleMobileDrawerTouchStart(e) {
+    const y = e.touches?.[0]?.clientY;
+    if (typeof y !== "number") return;
+    mobileDrawerTouchRef.current = { startY: y, lastY: y, moved: false };
+  }
+
+  function handleMobileDrawerTouchMove(e) {
+    const y = e.touches?.[0]?.clientY;
+    if (typeof y !== "number") return;
+    const state = mobileDrawerTouchRef.current;
+    state.lastY = y;
+    if (Math.abs(y - state.startY) > 8) {
+      state.moved = true;
+      skipMobileDrawerClickRef.current = true;
+    }
+  }
+
+  function handleMobileDrawerTouchEnd() {
+    const { startY, lastY, moved } = mobileDrawerTouchRef.current;
+    const deltaY = lastY - startY;
+
+    if (moved) {
+      if (deltaY <= -24) {
+        setMobilePanelOpen(true);
+      } else if (deltaY >= 24) {
+        setMobilePanelOpen(false);
+      }
+
+      setTimeout(() => {
+        skipMobileDrawerClickRef.current = false;
+      }, 0);
+    }
+  }
+
+  function handleMobileDrawerClick() {
+    if (skipMobileDrawerClickRef.current) return;
+    setMobilePanelOpen(v => !v);
+  }
+
   return (
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: C.bg, fontFamily: "'DM Sans', sans-serif", overflow: "hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@500;700&display=swap" rel="stylesheet" />
@@ -1120,37 +1162,78 @@ export default function App() {
 
       {/* ── MOBILE layout ── */}
       {isMobile ? (
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-          {/* Map section */}
+        <div style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          background: "radial-gradient(ellipse 100% 120% at 50% 80%, #0d1e35 0%, #0a0e1a 65%)",
+          padding: "16px 0"
+        }}>
           <div style={{
-            background: "radial-gradient(ellipse 100% 120% at 50% 80%, #0d1e35 0%, #0a0e1a 65%)",
-            padding: "22px 0 18px", flexShrink: 0
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center"
           }}>
             <ParkingMap compact={true} />
-            {/* Legend */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 16, flexWrap: "wrap", padding: "0 14px" }}>
-              {legendItems.map(l => (
-                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 9, height: 9, borderRadius: "50%", background: l.dashed ? "transparent" : l.color, border: l.dashed ? `2px dashed ${l.color}` : "none", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: C.textSub, fontWeight: 600 }}>{l.label}</span>
-                </div>
-              ))}
-              <button onClick={openWaitlist} style={{
-                padding: "6px 14px", borderRadius: 8,
-                background: C.purpleDim + "aa", border: `1px solid ${C.purple}44`,
-                color: C.purple, fontWeight: 700, fontSize: 12,
-                cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6
-              }}>
-                Join Waitlist {waitlist.length > 0 && <span style={{ background: C.purple, color: "#fff", borderRadius: 99, padding: "1px 7px", fontSize: 11 }}>{waitlist.length}</span>}
-              </button>
-            </div>
           </div>
 
-          {/* List panel */}
-          <div style={{ flex: 1, background: C.surface, borderTop: `2px solid ${C.border2}`, boxShadow: "0 -10px 24px rgba(0,0,0,0.25)" }}>
-            <TabBar />
-            {tab === "spots" && <SpotsList />}
-            {tab === "waitlist" && <WaitlistContent />}
+          {/* Collapsible bottom drawer */}
+          <div style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: mobilePanelOpen ? "58%" : 52,
+            background: C.surface,
+            borderTop: `1px solid ${C.border2}`,
+            boxShadow: "0 -10px 24px rgba(0,0,0,0.35)",
+            borderRadius: "14px 14px 0 0",
+            display: "flex",
+            flexDirection: "column",
+            transition: "height 0.22s ease",
+            zIndex: 5
+          }}>
+            <button
+              onClick={handleMobileDrawerClick}
+              onTouchStart={handleMobileDrawerTouchStart}
+              onTouchMove={handleMobileDrawerTouchMove}
+              onTouchEnd={handleMobileDrawerTouchEnd}
+              style={{
+                height: 52,
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                color: C.textSub,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                fontFamily: "inherit"
+              }}
+            >
+              <span style={{
+                width: 34,
+                height: 4,
+                borderRadius: 99,
+                background: C.border2,
+                display: "inline-block"
+              }} />
+              {mobilePanelOpen ? "Hide Panels" : "Spots & Waitlist"}
+            </button>
+
+            {mobilePanelOpen && (
+              <>
+                <TabBar />
+                <div style={{ overflowY: "auto", flex: 1 }}>
+                  {tab === "spots" && <SpotsList />}
+                  {tab === "waitlist" && <WaitlistContent />}
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : (
