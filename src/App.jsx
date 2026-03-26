@@ -136,7 +136,7 @@ function Field({ label, children }) {
 function toOccupancyMap(rows = []) {
   return (rows || []).reduce((acc, row) => {
     if (!row?.charger_id) return acc;
-    acc[row.charger_id] = { name: row.user_name, startH: row.start_h, endH: row.end_h };
+    acc[row.charger_id] = { name: row.user_name, startH: row.start_h, endH: row.end_h, ownerId: row.owner_id };
     return acc;
   }, {});
 }
@@ -289,6 +289,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [tab, setTab] = useState("spots");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [authUserId, setAuthUserId] = useState(null);
   const sideRef = useRef(null);
   const isMobile = useIsMobile();
 
@@ -303,6 +304,7 @@ export default function App() {
     if (!wlRes.error) setWaitlist((wlRes.data || []).map(row => ({
       id: row.id,
       name: row.user_name,
+      ownerId: row.owner_id,
       joinedAt: Date.parse(row.joined_at),
       endH: row.end_h
     })));
@@ -317,6 +319,24 @@ export default function App() {
       } catch {
         // ignore
       }
+
+      let userId = null;
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (!userErr && userData?.user) {
+        userId = userData.user.id;
+      } else {
+        const { data: anonData, error: anonErr } = await supabase.auth.signInAnonymously();
+        if (!anonErr && anonData?.user) {
+          userId = anonData.user.id;
+        }
+      }
+
+      if (!userId) {
+        setToast("Could not initialize user session.");
+      } else {
+        setAuthUserId(userId);
+      }
+
       await fetchState();
     };
 
@@ -387,9 +407,15 @@ export default function App() {
     // Ensure no conflicting occupancy row before adding. This avoids requiring a unique index on charger_id.
     await supabase.from("occupancy").delete().eq("charger_id", modal.spotId);
 
-    const { error } = await supabase.from("occupancy").insert({
+    if (!authUserId) {
+      setToast("Session missing. Please refresh and try again.");
+      return;
+    }
+
+    const { data, error } = await supabase.from("occupancy").insert({
       charger_id: modal.spotId,
       user_name: currentUser,
+      owner_id: authUserId,
       start_h: +form.startH,
       end_h: +form.endH,
       created_at: new Date().toISOString(),
@@ -397,7 +423,14 @@ export default function App() {
     });
 
     if (error) {
-      setToast("Error saving claim. Please try again.");
+      console.error("Claim insert failed", error, { charger_id: modal.spotId, user_name: currentUser });
+      setToast(`Error saving claim: ${error.message || "Please try again."}`);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn("Claim insert returned no rows", data);
+      setToast("Error saving claim, server response empty.");
       return;
     }
 
@@ -418,8 +451,14 @@ export default function App() {
       return;
     }
 
+    if (!authUserId) {
+      setToast("Session missing. Please refresh and try again.");
+      return;
+    }
+
     const { error } = await supabase.from("waitlist").insert({
       user_name: currentUser,
+      owner_id: authUserId,
       joined_at: new Date().toISOString(),
       end_h: +form.endH
     });
@@ -436,16 +475,40 @@ export default function App() {
   }
 
   async function release(spotId) {
+    const currentOccupancy = occupancy[spotId];
+    if (!currentOccupancy) {
+      setToast("Spot is already available.");
+      return;
+    }
+
+    const isOwner = !!authUserId && currentOccupancy.ownerId === authUserId;
+    if (!isAdmin && !isOwner) {
+      setToast("You can only release your own spot.");
+      return;
+    }
+
+    let releaseQuery = supabase.from("occupancy").delete().eq("charger_id", spotId);
+    if (!isAdmin) {
+      releaseQuery = releaseQuery.eq("owner_id", authUserId);
+    }
+
+    const { data: releasedRows, error: releaseErr } = await releaseQuery.select("charger_id");
+    if (releaseErr) {
+      setToast("Error releasing spot");
+      return;
+    }
+
+    if (!isAdmin && (!releasedRows || releasedRows.length === 0)) {
+      setToast("You can only release your own spot.");
+      return;
+    }
+
     if (waitlist.length > 0) {
       const next = waitlist[0];
-      const { error: deleteErr } = await supabase.from("waitlist").delete().eq("id", next.id);
-      if (deleteErr) {
-        setToast("Error releasing spot");
-        return;
-      }
       const { error: upsertErr } = await supabase.from("occupancy").upsert({
         charger_id: spotId,
         user_name: next.name,
+        owner_id: next.ownerId,
         start_h: currentH,
         end_h: next.endH,
         updated_at: new Date().toISOString()
@@ -454,14 +517,15 @@ export default function App() {
         setToast("Error assigning next user");
         return;
       }
+
+      const { error: deleteErr } = await supabase.from("waitlist").delete().eq("id", next.id);
+      if (deleteErr) {
+        setToast("Spot released, but failed to update waitlist.");
+      }
+
       await fetchState();
       setToast(`Spot auto-assigned to ${next.name}!`);
     } else {
-      const { error } = await supabase.from("occupancy").delete().eq("charger_id", spotId);
-      if (error) {
-        setToast("Error releasing spot");
-        return;
-      }
       await fetchState();
       setToast("Spot released.");
     }
@@ -487,8 +551,8 @@ export default function App() {
     return `${Math.floor(mins / 60)}h ${mins % 60}m ago`;
   }
 
-  const mySpot = Object.entries(occupancy).find(([, v]) => v.name === currentUser);
-  const myWaitPos = waitlist.findIndex(w => w.name === currentUser);
+  const mySpot = Object.entries(occupancy).find(([, v]) => (authUserId && v.ownerId === authUserId) || v.name === currentUser);
+  const myWaitPos = waitlist.findIndex(w => (authUserId && w.ownerId === authUserId) || w.name === currentUser);
 
   // ── Parking Map ──────────────────────────────────────────────────────────────
   const ParkingMap = ({ compact = false }) => (
@@ -620,7 +684,7 @@ export default function App() {
   // ── Spots list ───────────────────────────────────────────────────────────────
   const SpotsList = () => INITIAL_SPOTS.map(spot => {
     const occ = occupancy[spot.id];
-    const isMe = occ?.name === currentUser;
+    const isMe = !!occ && ((authUserId && occ.ownerId === authUserId) || occ.name === currentUser);
     const isSelected = selected === spot.id;
     const isMaint = maintenance[spot.id];
     return (
@@ -698,10 +762,18 @@ export default function App() {
                   border: `1px solid ${C.border2}`, background: "transparent",
                   color: C.textSub, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
                 }}>Details</button>
-                <button onClick={e => { e.stopPropagation(); release(spot.id); }} style={{
-                  flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
-                  background: C.redDim, color: C.red, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-                }}>Release</button>
+                {(isMe || isAdmin) ? (
+                  <button onClick={e => { e.stopPropagation(); release(spot.id); }} style={{
+                    flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
+                    background: C.redDim, color: C.red, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                  }}>Release</button>
+                ) : (
+                  <button disabled style={{
+                    flex: 1, padding: "9px 0", borderRadius: 8,
+                    border: `1px solid ${C.border2}`, background: "transparent",
+                    color: C.textMuted, fontSize: 13, fontWeight: 700, cursor: "not-allowed", fontFamily: "inherit"
+                  }}>In Use</button>
+                )}
               </>
             )}
           </div>
@@ -730,7 +802,7 @@ export default function App() {
             <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 700, letterSpacing: "0.07em" }}>QUEUE — first in line gets next available spot</div>
           </div>
           {waitlist.map((entry, idx) => {
-            const isMe = entry.name === currentUser;
+            const isMe = (authUserId && entry.ownerId === authUserId) || entry.name === currentUser;
             return (
               <div key={entry.id} style={{
                 padding: "13px 16px", borderBottom: `1px solid ${C.border}`,
