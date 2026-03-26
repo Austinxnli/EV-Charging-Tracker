@@ -373,6 +373,11 @@ export default function App() {
   const availCount = INITIAL_SPOTS.filter(s => !occupancy[s.id] && !maintenance[s.id]).length;
 
   async function toggleMaintenance(spotId) {
+    if (!isAdmin) {
+      setToast("Admin access required.");
+      return;
+    }
+
     const isNowMaintenance = !maintenance[spotId];
     const { error } = await supabase.from("maintenance").upsert({
       charger_id: spotId,
@@ -404,6 +409,15 @@ export default function App() {
       return;
     }
 
+    // Guard against stale UI: spot may have been claimed by someone else before submit.
+    const existingClaim = occupancy[modal.spotId];
+    if (existingClaim && existingClaim.ownerId !== authUserId) {
+      await fetchState();
+      setModal(null);
+      setToast("That spot was just claimed by someone else.");
+      return;
+    }
+
     // Ensure no conflicting occupancy row before adding. This avoids requiring a unique index on charger_id.
     await supabase.from("occupancy").delete().eq("charger_id", modal.spotId);
 
@@ -412,7 +426,7 @@ export default function App() {
       return;
     }
 
-    const { data, error } = await supabase.from("occupancy").insert({
+    const { error } = await supabase.from("occupancy").insert({
       charger_id: modal.spotId,
       user_name: currentUser,
       owner_id: authUserId,
@@ -424,13 +438,14 @@ export default function App() {
 
     if (error) {
       console.error("Claim insert failed", error, { charger_id: modal.spotId, user_name: currentUser });
+      // Unique conflict means another user claimed the spot between open and submit.
+      if (error.code === "23505") {
+        await fetchState();
+        setModal(null);
+        setToast("That spot was just claimed by someone else.");
+        return;
+      }
       setToast(`Error saving claim: ${error.message || "Please try again."}`);
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      console.warn("Claim insert returned no rows", data);
-      setToast("Error saving claim, server response empty.");
       return;
     }
 
@@ -503,8 +518,14 @@ export default function App() {
       return;
     }
 
-    if (waitlist.length > 0) {
+    if (waitlist.length > 0 && isAdmin) {
       const next = waitlist[0];
+      if (!next.ownerId) {
+        await fetchState();
+        setToast("Spot released. Next waitlist user must rejoin to claim.");
+        return;
+      }
+
       const { error: upsertErr } = await supabase.from("occupancy").upsert({
         charger_id: spotId,
         user_name: next.name,
@@ -527,16 +548,32 @@ export default function App() {
       setToast(`Spot auto-assigned to ${next.name}!`);
     } else {
       await fetchState();
-      setToast("Spot released.");
+      setToast(waitlist.length > 0 ? "Spot released. Next person in line can claim now." : "Spot released.");
     }
   }
 
-  async function removeFromWaitlist(id) {
-    const { error } = await supabase.from("waitlist").delete().eq("id", id);
+  async function removeFromWaitlist(id, ownerId) {
+    if (!isAdmin && (!authUserId || ownerId !== authUserId)) {
+      setToast("You can only remove yourself from waitlist.");
+      return;
+    }
+
+    let removeQuery = supabase.from("waitlist").delete().eq("id", id);
+    if (!isAdmin) {
+      removeQuery = removeQuery.eq("owner_id", authUserId);
+    }
+
+    const { data: removedRows, error } = await removeQuery.select("id");
     if (error) {
       setToast("Failed to remove from waitlist");
       return;
     }
+
+    if (!isAdmin && (!removedRows || removedRows.length === 0)) {
+      setToast("You can only remove yourself from waitlist.");
+      return;
+    }
+
     await fetchState();
   }
 
@@ -827,9 +864,15 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: 12, color: C.textMuted }}>Joined {formatWait(entry.joinedAt)} · until {HOURS.find(h => h.value === entry.endH)?.label}</div>
                 </div>
-                <button onClick={() => removeFromWaitlist(entry.id)} style={{
-                  background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: "4px", borderRadius: 6, flexShrink: 0
-                }}>✕</button>
+                {(isMe || isAdmin) ? (
+                  <button onClick={() => removeFromWaitlist(entry.id, entry.ownerId)} style={{
+                    background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: "4px", borderRadius: 6, flexShrink: 0
+                  }}>✕</button>
+                ) : (
+                  <button disabled style={{
+                    background: "transparent", border: "none", color: C.textMuted, cursor: "not-allowed", fontSize: 16, padding: "4px", borderRadius: 6, flexShrink: 0, opacity: 0.4
+                  }}>✕</button>
+                )}
               </div>
             );
           })}
