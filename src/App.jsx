@@ -80,35 +80,15 @@ function Avatar({ name, size = 36 }) {
 }
 
 function EVLogo({ size = 30 }) {
-  const green = "#59B947";
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" style={{ display: "block" }}>
-      <circle
-        cx="50"
-        cy="55"
-        r="40"
-        fill="none"
-        stroke={green}
-        strokeWidth="5"
-        strokeDasharray="228 24"
-        strokeDashoffset="13"
-        strokeLinecap="round"
-      />
-
-      <path d="M15 32c12-15 28-22 47-21" fill="none" stroke={green} strokeWidth="5" strokeLinecap="round" />
-
-      <rect x="60" y="6" width="15" height="9" rx="2.5" fill={green} />
-      <rect x="74" y="8" width="9" height="5" rx="2" fill={green} />
-      <rect x="66" y="1" width="3.2" height="6" rx="1.4" fill={green} />
-      <rect x="71" y="1" width="3.2" height="6" rx="1.4" fill={green} />
-
-      <path d="M24 55c0-11 8-20 18-20h16c10 0 18 9 18 20" fill="none" stroke={green} strokeWidth="4.8" strokeLinecap="round" />
-      <rect x="18" y="55" width="64" height="26" rx="7" fill={green} />
-
-      <rect x="35" y="61.5" width="30" height="7" rx="3.5" fill="white" opacity="0.88" />
-      <rect x="24" y="59.5" width="11" height="5" rx="2.5" transform="rotate(-20 24 59.5)" fill="white" opacity="0.88" />
-      <rect x="65" y="59.5" width="11" height="5" rx="2.5" transform="rotate(20 65 59.5)" fill="white" opacity="0.88" />
-    </svg>
+    <img
+      src="/ev-logo.png"
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      style={{ display: "block" }}
+    />
   );
 }
 
