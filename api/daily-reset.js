@@ -56,6 +56,24 @@ export default async function handler(req, res) {
     return;
   }
 
-  const deletedRows = Array.isArray(resetResult.data) ? resetResult.data.length : 0;
-  res.status(200).json({ ok: true, releasedCount: deletedRows });
+  const waitlistResetResult = await supabaseRequest(
+    supabaseUrl,
+    serviceRole,
+    "DELETE",
+    "waitlist?id=not.is.null&select=id"
+  );
+
+  if (!waitlistResetResult.ok) {
+    res.status(waitlistResetResult.status).json({ error: "Occupancy reset, but waitlist reset failed", details: waitlistResetResult.data });
+    return;
+  }
+
+  const releasedRows = Array.isArray(resetResult.data) ? resetResult.data.length : 0;
+  const waitlistClearedRows = Array.isArray(waitlistResetResult.data) ? waitlistResetResult.data.length : 0;
+
+  res.status(200).json({
+    ok: true,
+    releasedCount: releasedRows,
+    waitlistClearedCount: waitlistClearedRows
+  });
 }
