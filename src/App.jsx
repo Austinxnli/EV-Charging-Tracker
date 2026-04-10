@@ -306,12 +306,15 @@ export default function App() {
   const [form, setForm] = useState({});
   const [now, setNow] = useState(new Date());
   const [toast, setToast] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const [tab, setTab] = useState("spots");
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [authUserId, setAuthUserId] = useState(null);
   const [adminToken, setAdminToken] = useState(null);
   const sideRef = useRef(null);
+  const notificationKeysRef = useRef(new Set());
+  const prevAvailRef = useRef(null);
   const mobileDrawerTouchRef = useRef({ startY: 0, lastY: 0, moved: false });
   const skipMobileDrawerClickRef = useRef(false);
   const isMobile = useIsMobile();
@@ -408,6 +411,53 @@ export default function App() {
   const currentH = now.getHours();
 
   const availCount = INITIAL_SPOTS.filter(s => !occupancy[s.id] && !maintenance[s.id]).length;
+  const unreadCount = notifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0);
+
+  function pushNotification({ title, message, key }) {
+    if (key && notificationKeysRef.current.has(key)) return;
+    if (key) notificationKeysRef.current.add(key);
+
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      message,
+      ts: Date.now(),
+      read: false
+    };
+
+    setNotifications(prev => [entry, ...prev].slice(0, 25));
+    setToast(message);
+
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification(title, { body: message });
+      } catch {
+        // ignore browser notification failures
+      }
+    }
+  }
+
+  function openNotifications() {
+    setModal({ type: "notifications" });
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  }
+
+  function clearNotifications() {
+    setNotifications([]);
+  }
+
+  useEffect(() => {
+    if (!currentUser || typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      const prompted = localStorage.getItem("ev_notif_prompted") === "1";
+      if (Notification.permission === "default" && !prompted) {
+        localStorage.setItem("ev_notif_prompted", "1");
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch {
+      // ignore permission prompt failures
+    }
+  }, [currentUser]);
 
   async function toggleMaintenance(spotId) {
     if (!isAdmin) {
@@ -705,6 +755,55 @@ export default function App() {
 
   const mySpot = Object.entries(occupancy).find(([, v]) => (authUserId && v.ownerId === authUserId) || v.name === currentUser);
   const myWaitPos = waitlist.findIndex(w => (authUserId && w.ownerId === authUserId) || w.name === currentUser);
+
+  useEffect(() => {
+    if (!mySpot) return;
+    const spotId = Number(mySpot[0]);
+    const { endH } = mySpot[1] || {};
+    const endHour = Number(endH);
+    if (Number.isNaN(endHour)) return;
+
+    const remainingMins = (endHour - now.getHours()) * 60 - now.getMinutes();
+    if (remainingMins <= 0) {
+      const expiredKey = `expiry-expired-${spotId}-${endHour}-${now.toDateString()}`;
+      pushNotification({
+        title: "Charging Time Ended",
+        message: `Your charger ${spotId} session has ended. Please move your car.`,
+        key: expiredKey
+      });
+      return;
+    }
+
+    if (remainingMins <= 10) {
+      const key = `expiry-${spotId}-${endHour}-10-${now.toDateString()}`;
+      pushNotification({
+        title: "Charging Time Reminder",
+        message: `Your charger ${spotId} session ends in about 10 minutes.`,
+        key
+      });
+    }
+  }, [mySpot, now]);
+
+  useEffect(() => {
+    if (prevAvailRef.current == null) {
+      prevAvailRef.current = availCount;
+      return;
+    }
+
+    const prevAvail = prevAvailRef.current;
+    const currentWaitEntry = myWaitPos >= 0 ? waitlist[myWaitPos] : null;
+    if (myWaitPos >= 0 && availCount > prevAvail && currentWaitEntry) {
+      const opened = availCount - prevAvail;
+      const key = `spot-open-${prevAvail}-${availCount}-${currentWaitEntry.id}`;
+      pushNotification({
+        title: "Spot Opened",
+        message: `${opened === 1 ? "A charger spot just opened" : `${opened} charger spots just opened`}. You're #${myWaitPos + 1} in line.`,
+        key
+      });
+    }
+
+    prevAvailRef.current = availCount;
+  }, [availCount, myWaitPos, waitlist]);
 
   // ── Parking Map ──────────────────────────────────────────────────────────────
   const ParkingMap = ({ compact = false }) => (
@@ -1104,6 +1203,41 @@ export default function App() {
             >✕</button>
           </div>
           <button
+            onClick={openNotifications}
+            style={{
+              position: "relative",
+              padding: isMobile ? "6px 8px" : "6px 10px",
+              borderRadius: 8,
+              border: `1px solid ${C.border2}`,
+              background: C.surface2,
+              color: C.textSub,
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: "pointer",
+              fontFamily: "inherit"
+            }}
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute",
+                top: -6,
+                right: -6,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 99,
+                background: C.red,
+                color: "#fff",
+                fontSize: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 4px",
+                lineHeight: 1
+              }}>{unreadCount > 9 ? "9+" : unreadCount}</span>
+            )}
+          </button>
+          <button
             onClick={() => {
               if (isAdmin) {
                 try { sessionStorage.removeItem("ev_admin_token"); } catch (err) { console.warn("Failed to clear admin token", err); }
@@ -1293,6 +1427,46 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* NOTIFICATIONS MODAL */}
+      {modal?.type === "notifications" && (
+        <Modal title="Notifications" subtitle={`${notifications.length} recent`} onClose={() => setModal(null)}>
+          {notifications.length === 0 ? (
+            <div style={{ padding: "26px 4px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 30, marginBottom: 10 }}>🔔</div>
+              <div style={{ color: C.textSub, fontWeight: 700, fontSize: 14 }}>No notifications yet</div>
+              <div style={{ color: C.textMuted, fontSize: 12, marginTop: 6 }}>You will see reminders and spot-open alerts here.</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 14 }}>
+                {notifications.map((n) => (
+                  <div key={n.id} style={{
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    background: C.surface2,
+                    border: `1px solid ${C.border}`,
+                    marginBottom: 8
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                      <div style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{n.title}</div>
+                      <div style={{ color: C.textMuted, fontSize: 11, flexShrink: 0 }}>
+                        {new Date(n.ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </div>
+                    </div>
+                    <div style={{ color: C.textSub, fontSize: 12, lineHeight: 1.35 }}>{n.message}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={clearNotifications} style={{
+                width: "100%", padding: "11px 0", borderRadius: 10,
+                border: `1px solid ${C.border2}`, background: "transparent",
+                color: C.textSub, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit"
+              }}>Clear Notifications</button>
+            </>
+          )}
+        </Modal>
       )}
 
       {/* ADMIN LOGIN MODAL */}
