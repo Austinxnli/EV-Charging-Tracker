@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     supabaseUrl,
     serviceRole,
     "DELETE",
-    "occupancy?select=charger_id"
+    "occupancy?charger_id=gt.0&select=charger_id"
   );
 
   if (!resetResult.ok) {
