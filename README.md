@@ -43,7 +43,8 @@ Admin actions are verified through secure backend routes.
 To prevent forgotten active spots overnight, the app supports an automatic daily reset that releases all occupied spots.
 
 - Target time: 12:00 AM Vancouver time (`America/Vancouver`).
-- Cron strategy: runs hourly, then executes only when Vancouver local hour is `00` (handles DST).
+- Hobby-plan strategy: one daily cron run at `07:00 UTC` (Vancouver midnight during DST).
+- DST note: Vancouver switches between UTC-7 and UTC-8. On standard time, midnight Vancouver is `08:00 UTC`, so update the cron seasonally if you need exact midnight year-round on Hobby.
 - Endpoint: `/api/daily-reset`
 - Security: requires `CRON_SECRET` (Bearer token header).
 

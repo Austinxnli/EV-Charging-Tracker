@@ -1,17 +1,6 @@
 /* eslint-env node */
 import process from "node:process";
 
-function getVancouverHour(date = new Date()) {
-  const hourText = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Vancouver",
-    hour: "2-digit",
-    hour12: false
-  }).format(date);
-
-  const hour = Number(hourText);
-  return Number.isNaN(hour) ? null : hour;
-}
-
 async function supabaseRequest(url, key, method, path) {
   const response = await fetch(`${url}/rest/v1/${path}`, {
     method,
@@ -55,14 +44,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  const url = new URL(req.url || "/", "http://localhost");
-  const force = url.searchParams.get("force") === "1";
-  const hourVancouver = getVancouverHour();
-  if (!force && hourVancouver !== 0) {
-    res.status(200).json({ ok: true, skipped: true, reason: "not_vancouver_midnight", hourVancouver });
-    return;
-  }
-
   const resetResult = await supabaseRequest(
     supabaseUrl,
     serviceRole,
@@ -76,5 +57,5 @@ export default async function handler(req, res) {
   }
 
   const deletedRows = Array.isArray(resetResult.data) ? resetResult.data.length : 0;
-  res.status(200).json({ ok: true, releasedCount: deletedRows, hourVancouver });
+  res.status(200).json({ ok: true, releasedCount: deletedRows });
 }
