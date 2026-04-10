@@ -38,6 +38,17 @@ Admins can unlock extra controls to keep the lot organized:
 
 Admin actions are verified through secure backend routes.
 
+## Daily Auto-Release
+
+To prevent forgotten active spots overnight, the app supports an automatic daily reset that releases all occupied spots.
+
+- Target time: 12:00 AM Vancouver time (`America/Vancouver`).
+- Cron strategy: runs hourly, then executes only when Vancouver local hour is `00` (handles DST).
+- Endpoint: `/api/daily-reset`
+- Security: requires `CRON_SECRET` (Bearer token header).
+
+If you use Vercel, set `CRON_SECRET` in project environment variables so the scheduled call is authorized.
+
 ## Mobile Experience
 
 - Main view is the charger visual map.
