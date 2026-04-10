@@ -405,8 +405,6 @@ export default function App() {
     }
   }, [selected, tab]);
 
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
-
   const todayLabel = now.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
   const currentH = now.getHours();
 
@@ -1153,6 +1151,8 @@ export default function App() {
     if (skipMobileDrawerClickRef.current) return;
     setMobilePanelOpen(v => !v);
   }
+
+  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
 
   return (
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: C.bg, fontFamily: "'DM Sans', sans-serif", overflow: "hidden" }}>
